@@ -1,0 +1,40 @@
+{
+  "data_path": "whole_data.npy",
+  "out_root": "runs/0423sum",
+  "model": "cnn_ms2_359",
+
+  "use_meta": false,
+  "meta_only": false,
+  "norm": "per_sample",
+  "epochs": 30,
+  "batch_size": 256,
+  "lr": 0.001,
+  "val_ratio": 0.1,
+  "seed": 42,
+  "device": "cuda",
+
+  "classes": "7,9,10,11,12,13",
+
+  "num_workers": 0,
+  "pin_memory": false,
+  "prefetch_factor": 1,
+  "drop_last": false,
+
+  "sampler_type": "none",
+  "loss_type": "raw",
+  "stage_beta": 0.999,
+  "stage_gamma_max": 2.5,
+  "focal_gamma": 2.0,
+  "cb_beta": 0.9999,
+
+  "use_custom_train_counts": true,
+  "train_class_counts": {
+    "9": 500,
+    "10": 80,
+    "11": 750,
+    "13": 180
+  },
+  "train_count_cfg_uses_old_ids": true,
+  "train_count_seed": 42,
+  "train_count_strict": false
+}

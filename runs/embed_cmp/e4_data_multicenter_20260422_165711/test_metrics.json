@@ -1,0 +1,74 @@
+{
+  "acc": 0.8974956319161328,
+  "macro_f1": 0.8121928767160386,
+  "balanced_acc": 0.7923798186669465,
+  "topk_acc": {
+    "1": 0.8974956319161328,
+    "3": 0.9778683750728014
+  },
+  "per_class_recall": [
+    0.9228395061728395,
+    0.9698492462311558,
+    0.3465346534653465,
+    0.9965397923875432,
+    0.9789473684210527,
+    0.539568345323741
+  ],
+  "avg_confidence": 0.96766447729334,
+  "per_class_recall_detail": [
+    {
+      "new_id": 0,
+      "old_id": 7,
+      "raw_code": "L7",
+      "ppt_label": "C5",
+      "fault_name": "电机偏心",
+      "data_name": "L7 电机偏心",
+      "recall": 0.9228395061728395
+    },
+    {
+      "new_id": 1,
+      "old_id": 9,
+      "raw_code": "L9",
+      "ppt_label": "C3",
+      "fault_name": "双侧轴承保持架故障",
+      "data_name": "L9 双轴承支架破坏",
+      "recall": 0.9698492462311558
+    },
+    {
+      "new_id": 2,
+      "old_id": 10,
+      "raw_code": "L10",
+      "ppt_label": "C2",
+      "fault_name": "非驱动端轴承外圈故障",
+      "data_name": "L10 西边轴承滚珠外圈磨损",
+      "recall": 0.3465346534653465
+    },
+    {
+      "new_id": 3,
+      "old_id": 11,
+      "raw_code": "L11",
+      "ppt_label": "C4",
+      "fault_name": "双侧轴承外圈故障",
+      "data_name": "L11 双轴承滚珠外圈破坏性磨损",
+      "recall": 0.9965397923875432
+    },
+    {
+      "new_id": 4,
+      "old_id": 12,
+      "raw_code": "L12",
+      "ppt_label": "C0",
+      "fault_name": "无故障",
+      "data_name": "L12 正常运行",
+      "recall": 0.9789473684210527
+    },
+    {
+      "new_id": 5,
+      "old_id": 13,
+      "raw_code": "L13",
+      "ppt_label": "C1",
+      "fault_name": "驱动端轴承保持架故障",
+      "data_name": "L13 轴承支架破坏",
+      "recall": 0.539568345323741
+    }
+  ]
+}

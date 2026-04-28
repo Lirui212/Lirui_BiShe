@@ -9,13 +9,14 @@ def load_cfg(path: str) -> dict:
     return cfg
 
 def make_run_dir(base_out_dir: str, cfg_path: str) -> str:
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     cfg_name = os.path.splitext(os.path.basename(cfg_path))[0]
-    run_dir = os.path.join(base_out_dir, f"{cfg_name}_{ts}")
+    # run_dir = os.path.join(base_out_dir, f"{cfg_name}_{ts}")  --- 不带具体时间戳
+    run_dir = os.path.join(base_out_dir, f"{cfg_name}")
     os.makedirs(run_dir, exist_ok=True)
     return run_dir
 
-from models_opt import CNN1D_MS
+from models_opt import CNN1D_MS, CNN1D_MS_1Stage
 from baseline_train import CNN1D, TCN
 
 def build_model(model_name: str, n_classes: int, use_meta: bool, meta_dim: int = 33):
@@ -24,10 +25,24 @@ def build_model(model_name: str, n_classes: int, use_meta: bool, meta_dim: int =
         return CNN1D(n_classes=n_classes, use_meta=use_meta, meta_dim=meta_dim)
     elif model_name == "tcn":
         return TCN(n_classes=n_classes, use_meta=use_meta, meta_dim=meta_dim)
-    elif model_name == "cnn_ms":
-        return CNN1D_MS(n_classes=n_classes, use_meta=use_meta, meta_dim=meta_dim)
-    else:
-        raise ValueError(f"Unknown model: {model_name}")
+    
+    if model_name.startswith("cnn_ms"):
+        if model_name.startswith("cnn_ms2"):
+            print("-"*90 + "\n")
+            print(f"model: {model_name}")
+            ModelCls = CNN1D_MS
+        elif model_name.startswith("cnn_ms1"):
+            print("-"*90 + "\n")
+            print(f"model: {model_name}")
+            ModelCls = CNN1D_MS_1Stage
+
+        if model_name.endswith("3715"):
+            ms_kernels = (3, 7, 15)
+        elif model_name.endswith("359"):
+            ms_kernels = (3, 5, 9)
+
+        return ModelCls(n_classes=n_classes, use_meta=use_meta, meta_dim=meta_dim, ms_kernels=ms_kernels)
+
 
 def main():
     ap = argparse.ArgumentParser()

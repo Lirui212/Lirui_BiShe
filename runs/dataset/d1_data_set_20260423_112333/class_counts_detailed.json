@@ -1,0 +1,56 @@
+[
+  {
+    "new_id": 0,
+    "old_id": 7,
+    "raw_code": "L7",
+    "ppt_label": "C5",
+    "fault_name": "电机偏心",
+    "data_name": "L7 电机偏心",
+    "train_count": 900
+  },
+  {
+    "new_id": 1,
+    "old_id": 9,
+    "raw_code": "L9",
+    "ppt_label": "C3",
+    "fault_name": "双侧轴承保持架故障",
+    "data_name": "L9 双轴承支架破坏",
+    "train_count": 550
+  },
+  {
+    "new_id": 2,
+    "old_id": 10,
+    "raw_code": "L10",
+    "ppt_label": "C2",
+    "fault_name": "非驱动端轴承外圈故障",
+    "data_name": "L10 西边轴承滚珠外圈磨损",
+    "train_count": 80
+  },
+  {
+    "new_id": 3,
+    "old_id": 11,
+    "raw_code": "L11",
+    "ppt_label": "C4",
+    "fault_name": "双侧轴承外圈故障",
+    "data_name": "L11 双轴承滚珠外圈破坏性磨损",
+    "train_count": 750
+  },
+  {
+    "new_id": 4,
+    "old_id": 12,
+    "raw_code": "L12",
+    "ppt_label": "C0",
+    "fault_name": "无故障",
+    "data_name": "L12 正常运行",
+    "train_count": 2394
+  },
+  {
+    "new_id": 5,
+    "old_id": 13,
+    "raw_code": "L13",
+    "ppt_label": "C1",
+    "fault_name": "驱动端轴承保持架故障",
+    "data_name": "L13 轴承支架破坏",
+    "train_count": 180
+  }
+]

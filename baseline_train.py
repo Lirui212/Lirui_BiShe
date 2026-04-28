@@ -8,9 +8,17 @@ from sklearn.metrics import f1_score, balanced_accuracy_score, confusion_matrix,
 import matplotlib.pyplot as plt
 import time
 
-# -------------------------
-# 0) 复现性
-# -------------------------
+LABEL_INFO = {
+    12: {"label": "C0", "label_name": "无故障",               "data_name": "L12 正常运行"},
+    13: {"label": "C1", "label_name": "驱动端轴承保持架故障", "data_name": "L13 轴承支架破坏"},
+    10: {"label": "C2", "label_name": "非驱动端轴承外圈故障", "data_name": "L10 西边轴承滚珠外圈磨损"},
+    9:  {"label": "C3", "label_name": "双侧轴承保持架故障",   "data_name": "L9 双轴承支架破坏"},
+    11: {"label": "C4", "label_name": "双侧轴承外圈故障",     "data_name": "L11 双轴承滚珠外圈破坏性磨损"},
+    7:  {"label": "C5", "label_name": "电机偏心",             "data_name": "L7 电机偏心"},
+}  # 类别字典，对应原始数据标签
+
+
+# 0 复现性
 def set_seed(seed: int = 42):
     random.seed(seed)
     np.random.seed(seed)
@@ -19,9 +27,7 @@ def set_seed(seed: int = 42):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-# -------------------------
-# 1) 数据--wholedata.py 已经预处理好并保存为 npy，加载并拆分
-# -------------------------
+# 1 数据wholedata.py 已经预处理好并保存为 npy，加载并拆分
 def load_whole_data(npy_path: str):
     data = np.load(npy_path, allow_pickle=True).item()
 
@@ -55,9 +61,7 @@ def onehot_to_index(y_onehot: np.ndarray):
     y_idx = np.argmax(y_onehot, axis=1).astype(np.int64)
     return y_idx
 
-# -------------------------
-# 2) Train/Val split 针对类别不平衡
-# -------------------------
+# 2 Train/Val split 针对类别不平衡
 def make_val_split(y: np.ndarray, val_ratio=0.1, seed=42):
     """
     按类别拆分: max(1, int(val_ratio*n_c))
@@ -85,12 +89,11 @@ def make_val_split(y: np.ndarray, val_ratio=0.1, seed=42):
     rng.shuffle(val_idx)
     return np.array(train_idx), np.array(val_idx)
 
-# -------------------------
-# 3) 数据集类，归一化
-# -------------------------
+# 3 数据集类，归一化
 class WholeDataDataset(Dataset):
     def __init__(self, wave, meta, y_idx, indices,
                  use_meta=True,
+                 meta_only = False,
                  norm_mode="per_sample",
                  global_mean=None,
                  global_std=None):
@@ -98,6 +101,7 @@ class WholeDataDataset(Dataset):
         self.meta = meta[indices].astype(np.float32)
         self.y = y_idx[indices].astype(np.int64)
         self.use_meta = use_meta
+        self.meta_only = meta_only
         self.norm_mode = norm_mode
         self.global_mean = global_mean
         self.global_std = global_std
@@ -122,13 +126,15 @@ class WholeDataDataset(Dataset):
         y = torch.tensor(self.y[i], dtype=torch.long)
         if self.use_meta:
             xm = torch.from_numpy(self.meta[i])  # (33,)
+            if self.meta_only:  # 如果设置只用meta，跑meta_only实验
+                xw = torch.zeros_like(xw)
+                return xw, xm, y
             return xw, xm, y
+            
         else:
             return xw, y
 
-# -------------------------
-# 4) CNN&TCN模型，简单baseline
-# -------------------------
+# 4 CNN&TCN模型，简单baseline-
 class CNN1D(nn.Module):
     def __init__(self, n_classes=16, use_meta=True, meta_dim=33):
         super().__init__()
@@ -169,12 +175,18 @@ class CNN1D(nn.Module):
                 nn.Linear(256, n_classes)
             )
 
-    def forward(self, x_wave, x_meta=None):
+    def forward(self, x_wave, x_meta=None, return_embed=False):
         z = self.backbone(x_wave)         # (B,256,T)
         z = self.pool(z).squeeze(-1)      # (B,256)
+        embed = z
+
         if self.use_meta:
             z = torch.cat([z, x_meta], dim=1)
+
         logits = self.head(z)
+        if return_embed:
+            return logits, embed
+
         return logits
 
 class TCNBlock(nn.Module):
@@ -188,7 +200,7 @@ class TCNBlock(nn.Module):
         self.down = nn.Conv1d(in_ch, out_ch, 1) if in_ch != out_ch else None
         self.drop = nn.Dropout(dropout)
 
-    def forward(self, x):
+    def forward(self, x, return_embed=False):
         y = self.drop(F.relu(self.bn1(self.conv1(x))))
         y = self.drop(F.relu(self.bn2(self.conv2(y))))
         res = x if self.down is None else self.down(x)
@@ -222,16 +234,14 @@ class TCN(nn.Module):
                 nn.Linear(128, n_classes)
             )
 
-    def forward(self, x_wave, x_meta=None):
+    def forward(self, x_wave, x_meta=None, return_embed=False):
         z = self.tcn(x_wave)
         z = self.pool(z).squeeze(-1)
         if self.use_meta:
             z = torch.cat([z, x_meta], dim=1)
         return self.fc(z)
 
-# -------------------------
-# 5) 评估函数，计算多种指标，保存混淆矩阵
-# -------------------------
+# 5 评估函数，计算多种指标，保存混淆矩阵
 @torch.no_grad()
 def evaluate(model, loader, device, n_classes=16, use_meta=True, topk=(1,3)):
     model.eval()
@@ -284,21 +294,165 @@ def evaluate(model, loader, device, n_classes=16, use_meta=True, topk=(1,3)):
         "y_pred": y_pred,
     }
 
-def save_confusion_matrix(y_true, y_pred, out_path, n_classes=16):
+def save_confusion_matrix(
+    y_true,
+    y_pred,
+    out_path,
+    n_classes=16,
+    class_names=None,
+    normalize="true",   # "true" 表示按真实类别行归一化
+    figsize=(11, 9),
+    dpi=220
+):
+    """
+    更美观的混淆矩阵：
+    - 颜色深浅按百分比（行归一化）显示
+    - 方格内同时显示 count 和 percent
+    - 支持中文类别名称显示
+    """
     cm = confusion_matrix(y_true, y_pred, labels=list(range(n_classes)))
-    plt.figure(figsize=(10, 8))
-    plt.imshow(cm, interpolation="nearest")
-    plt.title("Confusion Matrix")
-    plt.xlabel("Pred")
-    plt.ylabel("True")
-    plt.colorbar()
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=200)
-    plt.close()
+    cm = cm.astype(np.int64)
 
-# -------------------------
-# 6) 训练
-# -------------------------
+    if normalize == "true":
+        row_sums = cm.sum(axis=1, keepdims=True)
+        cm_norm = cm / np.clip(row_sums, 1, None)
+    elif normalize == "pred":
+        col_sums = cm.sum(axis=0, keepdims=True)
+        cm_norm = cm / np.clip(col_sums, 1, None)
+    else:
+        total = cm.sum()
+        cm_norm = cm / max(total, 1)
+
+    if class_names is None:
+        class_names = [str(i) for i in range(n_classes)]
+
+    fig, ax = plt.subplots(figsize=figsize)
+    im = ax.imshow(cm_norm, interpolation="nearest", cmap=plt.cm.Blues, vmin=0.0, vmax=1.0)
+
+    cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    cbar.ax.set_ylabel("Row Percentage", rotation=90, va="bottom")
+
+    ax.set(
+        xticks=np.arange(n_classes),
+        yticks=np.arange(n_classes),
+        xticklabels=class_names,
+        yticklabels=class_names,
+        xlabel="Predicted Label",
+        ylabel="True Label",
+        title="Confusion Matrix (%)"
+    )
+
+    plt.setp(ax.get_xticklabels(), rotation=30, ha="right", rotation_mode="anchor")
+
+    # 网格线更清晰
+    ax.set_xticks(np.arange(-.5, n_classes, 1), minor=True)
+    ax.set_yticks(np.arange(-.5, n_classes, 1), minor=True)
+    ax.grid(which="minor", color="white", linestyle="-", linewidth=1.0)
+    ax.tick_params(which="minor", bottom=False, left=False)
+
+    # 在格子中写 count + percent
+    threshold = 0.5
+    for i in range(n_classes):
+        for j in range(n_classes):
+            count = cm[i, j]
+            pct = cm_norm[i, j] * 100.0
+            text = f"{count}\n{pct:.1f}%"
+            ax.text(
+                j, i, text,
+                ha="center", va="center",
+                color="white" if cm_norm[i, j] > threshold else "black",
+                fontsize=9
+            )
+
+    fig.tight_layout()
+    plt.savefig(out_path, dpi=dpi, bbox_inches="tight")
+    plt.close(fig)
+
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+
+def _series(history, key, default=np.nan):
+    """从history(list[dict])里抽取某个key的序列，缺失则填nan"""
+    out = []
+    for h in history:
+        v = h.get(key, default)
+        out.append(v if v is not None else default)
+    return np.array(out, dtype=float)
+
+def plot_training_curves(history, out_dir, prefix="curve", show_best=True):
+    """
+    history: 训练过程中append的log列表
+    prefix: 输出文件名前缀
+    """
+    if not history:
+        print("[WARN] history is empty, skip plotting.")
+        return
+
+    os.makedirs(out_dir, exist_ok=True)
+
+    epochs = _series(history, "epoch")
+    # 如果epoch缺失，用索引代替
+    if np.isnan(epochs).all():
+        epochs = np.arange(1, len(history) + 1)
+
+    train_loss = _series(history, "train_loss")
+
+    val_acc = _series(history, "val_acc")
+    val_macro_f1 = _series(history, "val_macro_f1")
+    val_bal_acc = _series(history, "val_balanced_acc")
+    best_macro_f1 = _series(history, "best_val_macro_f1")
+    epoch_time = _series(history, "epoch_time")
+
+    #  Loss curve
+    if not np.isnan(train_loss).all():
+        plt.figure(figsize=(8, 5))
+        plt.plot(epochs, train_loss, marker="o", linewidth=1)
+        plt.xlabel("Epoch")
+        plt.ylabel("Train Loss")
+        plt.title("Training Loss")
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(os.path.join(out_dir, f"{prefix}_loss.png"), dpi=200)
+        plt.close()
+
+    #  Metrics curve 
+    metrics_exist = not (np.isnan(val_acc).all() and np.isnan(val_macro_f1).all() and np.isnan(val_bal_acc).all())
+    if metrics_exist:
+        plt.figure(figsize=(9, 5))
+        if not np.isnan(val_acc).all():
+            plt.plot(epochs, val_acc, marker="o", linewidth=1, label="Val Acc")
+        if not np.isnan(val_macro_f1).all():
+            plt.plot(epochs, val_macro_f1, marker="o", linewidth=1, label="Val Macro-F1")
+        if not np.isnan(val_bal_acc).all():
+            plt.plot(epochs, val_bal_acc, marker="o", linewidth=1, label="Val Balanced-Acc")
+        if show_best and (not np.isnan(best_macro_f1).all()):
+            plt.plot(epochs, best_macro_f1, linestyle="--", linewidth=2, label="Best Val Macro-F1")
+
+        plt.xlabel("Epoch")
+        plt.ylabel("Score")
+        plt.title("Validation Metrics")
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(os.path.join(out_dir, f"{prefix}_metrics.png"), dpi=200)
+        plt.close()
+
+    #  Time per epoch
+    if not np.isnan(epoch_time).all():
+        plt.figure(figsize=(8, 5))
+        plt.plot(epochs, epoch_time, marker="o", linewidth=1)
+        plt.xlabel("Epoch")
+        plt.ylabel("Seconds")
+        plt.title("Epoch Time")
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(os.path.join(out_dir, f"{prefix}_time.png"), dpi=200)
+        plt.close()
+
+    print(f"[INFO] Saved curves to: {out_dir} ({prefix}_*.png)")
+
+# 6 训练
 def compute_class_weights(y_idx, n_classes=16):
     counts = np.bincount(y_idx, minlength=n_classes).astype(np.float64)
     # inverse freq (simple baseline)
@@ -312,6 +466,7 @@ def run_experiment(cfg: dict, model_builder=None):
     defaults = dict(
         model="cnn",
         use_meta=False,
+        meta_only = False,
         norm="per_sample",
         epochs=30,
         batch_size=256,
@@ -323,8 +478,9 @@ def run_experiment(cfg: dict, model_builder=None):
         num_workers=0,
         pin_memory=False,
         drop_last=False,
-        prefetch_factor=2,
+        prefetch_factor=2
     )
+
     for k,v in defaults.items():
         cfg.setdefault(k, v)
 
@@ -370,20 +526,20 @@ def run_experiment(cfg: dict, model_builder=None):
         global_mean = wave_tr[tr_idx].mean()
         global_std = wave_tr[tr_idx].std() + 1e-8
 
-    ds_train = WholeDataDataset(wave_tr, meta_tr, y_tr, tr_idx, use_meta=args.use_meta,
+    ds_train = WholeDataDataset(wave_tr, meta_tr, y_tr, tr_idx, use_meta=args.use_meta, meta_only=args.meta_only,  # 几个数据集都添加了meta_only指令
                                norm_mode=args.norm, global_mean=global_mean, global_std=global_std)
-    ds_val = WholeDataDataset(wave_tr, meta_tr, y_tr, va_idx, use_meta=args.use_meta,
+    ds_val = WholeDataDataset(wave_tr, meta_tr, y_tr, va_idx, use_meta=args.use_meta, meta_only=args.meta_only,
                              norm_mode=args.norm, global_mean=global_mean, global_std=global_std)
-    ds_test = WholeDataDataset(wave_te, meta_te, y_te, np.arange(len(y_te)), use_meta=args.use_meta,
+    ds_test = WholeDataDataset(wave_te, meta_te, y_te, np.arange(len(y_te)), use_meta=args.use_meta, meta_only=args.meta_only,
                                norm_mode=args.norm, global_mean=global_mean, global_std=global_std)
 
     # dl_train = DataLoader(ds_train, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=False)
     # dl_val   = DataLoader(ds_val, batch_size=args.batch_size, shuffle=False, num_workers=0)
     # dl_test  = DataLoader(ds_test, batch_size=args.batch_size, shuffle=False, num_workers=0)
-    num_workers = getattr(args, "num_workers", 4)
-    pin_memory = getattr(args, "pin_memory", True)
-    prefetch_factor = getattr(args, "prefetch_factor", 2)
-    drop_last = getattr(args, "drop_last", True)
+    num_workers = getattr(args, "num_workers", 0)
+    pin_memory = getattr(args, "pin_memory", False)
+    prefetch_factor = getattr(args, "prefetch_factor", 1)
+    drop_last = getattr(args, "drop_last", False)
 
     dl_train = DataLoader(
         ds_train,
@@ -414,10 +570,28 @@ def run_experiment(cfg: dict, model_builder=None):
     )
 
     class_w, counts = compute_class_weights(y_tr[tr_idx], n_classes=n_classes)
-    print("[INFO] Train class counts:", counts.tolist())
+    print("\n[INFO] Class mapping & counts (train split):")
+    print("new_id | old_id | ppt | ppt_name | data_name | train_count")
+    print("-"*90)
+    rows = []
+    for old_id in motor_ids:
+        new_id = id_map[old_id]
+        info = LABEL_INFO.get(old_id, {"label":"?", "label_name":"UNKNOWN", "data_name": f"L{old_id}"})
+        row = {
+            "new_id": int(new_id),
+            "old_id": int(old_id),
+            "label": info["label"],
+            "label_name": info["label_name"],
+            "data_name": info["data_name"],
+            "train_count": int(counts[new_id]),
+        }
+        rows.append(row)
+        print(f"{row['new_id']:>5} | {row['old_id']:>6} | {row['label']:<3} | {row['label_name']:<16} | {row['data_name']:<22} | {row['train_count']}")
 
-    with open(os.path.join(args.out_dir, "class_counts.json"), "w", encoding="utf-8") as f:
-        json.dump({"counts": counts.tolist(), "weights": class_w.tolist()}, f, ensure_ascii=False, indent=2)
+    # 保存在输出文件中，各类统计
+    with open(os.path.join(args.out_dir, "class_summary.json"), "w", encoding="utf-8") as f:
+        json.dump(rows, f, ensure_ascii=False, indent=2)
+
 
     device = torch.device(args.device)
 
@@ -509,23 +683,171 @@ def run_experiment(cfg: dict, model_builder=None):
     with open(os.path.join(args.out_dir, "history.json"), "w", encoding="utf-8") as f:
         json.dump(history, f, ensure_ascii=False, indent=2)
 
+    plot_training_curves(history, args.out_dir, prefix="curve")
+
     ckpt = torch.load(best_path, map_location=device)
     model.load_state_dict(ckpt["model"])
 
     test_metrics = evaluate(model, dl_test, device, n_classes=n_classes, use_meta=args.use_meta)
-    with open(os.path.join(args.out_dir, "test_metrics.json"), "w", encoding="utf-8") as f:
-        json.dump({k:v for k,v in test_metrics.items() if k not in ["y_true","y_pred"]},
-                  f, ensure_ascii=False, indent=2)
 
-    save_confusion_matrix(test_metrics["y_true"], test_metrics["y_pred"],
-                          os.path.join(args.out_dir, "confusion_matrix.png"),
-                          n_classes=n_classes)
+    test_metrics_save = {k: v for k, v in test_metrics.items() if k not in ["y_true", "y_pred"]}
+    test_metrics_save["per_class_recall_detail"] = build_per_class_recall_records(
+        per_class_recall=test_metrics["per_class_recall"],
+        motor_ids=motor_ids,
+        id_map=id_map
+    )
+
+    with open(os.path.join(args.out_dir, "test_metrics.json"), "w", encoding="utf-8") as f:
+        json.dump(test_metrics_save, f, ensure_ascii=False, indent=2)
+
+    class_names = build_confmat_class_names(motor_ids, id_map)
+
+    save_confusion_matrix(
+        test_metrics["y_true"],
+        test_metrics["y_pred"],
+        os.path.join(args.out_dir, "confusion_matrix.png"),
+        n_classes=n_classes,
+        class_names=class_names,
+        normalize="true"
+    )
 
     print("\n[TEST] acc=", test_metrics["acc"],
           "macro_f1=", test_metrics["macro_f1"],
           "balanced_acc=", test_metrics["balanced_acc"],
           "topk=", test_metrics["topk_acc"])
     return history, {k:v for k,v in test_metrics.items() if k not in ["y_true","y_pred"]}
+
+def parse_train_class_counts(train_class_counts, id_map=None, use_old_ids=True):
+    """
+    train_class_counts: dict, 例如 {"12": 400, "13": 120, "9": 25, "11": 20}
+    返回 remap 后的新类 id -> count
+    """
+    if not train_class_counts:
+        return {}
+
+    parsed = {}
+    for k, v in train_class_counts.items():
+        cls_id = int(k)
+        cnt = int(v)
+        if cnt <= 0:
+            continue
+
+        if use_old_ids:
+            if id_map is None or cls_id not in id_map:
+                continue
+            cls_id = id_map[cls_id]
+
+        parsed[cls_id] = cnt
+    return parsed
+
+
+def subsample_train_indices_by_class(y, train_idx, target_counts, seed=42, strict=False):
+    """
+    y: remap 后标签
+    train_idx: 原始训练子集索引
+    target_counts: {new_class_id: target_count}
+    strict=False 时，若目标数量超过可用数量，则自动截断并告警
+    """
+    if not target_counts:
+        return train_idx
+
+    rng = np.random.RandomState(seed)
+    train_idx = np.asarray(train_idx)
+    final_idx = []
+
+    classes_in_train = np.unique(y[train_idx])
+    for c in classes_in_train:
+        idx_c = train_idx[y[train_idx] == c]
+        rng.shuffle(idx_c)
+
+        target = target_counts.get(int(c), len(idx_c))
+
+        if target > len(idx_c):
+            if strict:
+                raise ValueError(
+                    f"class {c}: requested {target}, but only {len(idx_c)} available in train split"
+                )
+            print(f"[WARN] class {c}: requested {target}, clipped to {len(idx_c)}")
+            target = len(idx_c)
+
+        final_idx.extend(idx_c[:target].tolist())
+
+    rng.shuffle(final_idx)
+    return np.array(final_idx, dtype=np.int64)
+
+def build_class_count_records(motor_ids, id_map, counts, split_name="train"):
+    """
+    motor_ids: 保留的 old class id 列表（已排序）
+    id_map: old_id -> new_id
+    counts: remap 后的新类计数数组，如 [1164, 715, ...]
+    """
+    counts = np.asarray(counts).astype(int)
+    records = []
+
+    for old_id in motor_ids:
+        new_id = id_map[old_id]
+        info = LABEL_INFO.get(old_id, {
+            "label": f"C{new_id}",
+            "label_name": "UNKNOWN",
+            "data_name": f"L{old_id}"
+        })
+
+        records.append({
+            "new_id": int(new_id),
+            "old_id": int(old_id),
+            "raw_code": f"L{old_id}",
+            "ppt_label": info["label"],
+            "fault_name": info["label_name"],
+            "data_name": info["data_name"],
+            f"{split_name}_count": int(counts[new_id])
+        })
+    return records
+
+def build_confmat_class_names(motor_ids, id_map):
+    """
+    返回按 new_id 顺序排列的类别显示名
+    例如:
+    ['L7\n电机偏心', 'L9\n双侧轴承保持架故障', ...]
+    """
+    class_names = [None] * len(motor_ids)
+    for old_id in motor_ids:
+        new_id = id_map[old_id]
+        info = LABEL_INFO.get(old_id, {
+            "label_name": f"class_{new_id}",
+            "data_name": f"L{old_id}"
+        })
+        class_names[new_id] = f"L{old_id}\n{info['label_name']}"
+    return class_names
+
+def save_class_count_records(out_path, motor_ids, id_map, counts, split_name="train"):
+    records = build_class_count_records(
+        motor_ids=motor_ids,
+        id_map=id_map,
+        counts=counts,
+        split_name=split_name
+    )
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(records, f, ensure_ascii=False, indent=2)
+
+def build_per_class_recall_records(per_class_recall, motor_ids, id_map):
+    records = []
+    for old_id in motor_ids:
+        new_id = id_map[old_id]
+        info = LABEL_INFO.get(old_id, {
+            "label": f"C{new_id}",
+            "label_name": "UNKNOWN",
+            "data_name": f"L{old_id}"
+        })
+        records.append({
+            "new_id": int(new_id),
+            "old_id": int(old_id),
+            "raw_code": f"L{old_id}",
+            "ppt_label": info["label"],
+            "fault_name": info["label_name"],
+            "data_name": info["data_name"],
+            "recall": float(per_class_recall[new_id])
+        })
+    return records
 
 def main():
     ap = argparse.ArgumentParser()

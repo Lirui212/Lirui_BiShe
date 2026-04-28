@@ -1,0 +1,110 @@
+{
+  "keys": [
+    "train_sample",
+    "train_label",
+    "test_sample",
+    "test_label"
+  ],
+  "x_train_shape": [
+    29059,
+    2081
+  ],
+  "y_train_shape": [
+    29059,
+    16
+  ],
+  "x_test_shape": [
+    7271,
+    2081
+  ],
+  "y_test_shape": [
+    7271,
+    16
+  ],
+  "bad_train_onehot_count": 0,
+  "bad_test_onehot_count": 0,
+  "train_class_counts": [
+    3326,
+    1780,
+    218,
+    6031,
+    4054,
+    4127,
+    420,
+    1293,
+    1372,
+    795,
+    403,
+    1153,
+    2660,
+    554,
+    425,
+    448
+  ],
+  "test_class_counts": [
+    832,
+    446,
+    55,
+    1508,
+    1014,
+    1032,
+    105,
+    324,
+    343,
+    199,
+    101,
+    289,
+    665,
+    139,
+    107,
+    112
+  ],
+  "unique_sensors_train": 15,
+  "unique_sensors_test": 15,
+  "unique_sensors_all": 15,
+  "unique_conditions_train": 18,
+  "unique_conditions_test": 18,
+  "unique_conditions_all": 18,
+  "sensor_onehot_ok_train": true,
+  "sensor_onehot_ok_test": true,
+  "condition_code_ok_train": true,
+  "condition_code_ok_test": true,
+  "exact_duplicate_rows_between_train_test": 0,
+  "simulated_val_ratio": 0.1,
+  "simulated_train_counts_after_split": [
+    2993,
+    1602,
+    196,
+    5428,
+    3649,
+    3714,
+    378,
+    1164,
+    1235,
+    715,
+    363,
+    1038,
+    2394,
+    499,
+    383,
+    403
+  ],
+  "simulated_val_counts_after_split": [
+    333,
+    178,
+    22,
+    603,
+    405,
+    413,
+    42,
+    129,
+    137,
+    80,
+    40,
+    115,
+    266,
+    55,
+    42,
+    45
+  ]
+}

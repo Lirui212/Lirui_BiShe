@@ -1,0 +1,22 @@
+{
+  "data_path": "whole_data.npy",
+  "out_root": "runs",
+  "model": "cnn_ms2_3715",
+  "use_meta": false,
+  "meta_only": false,
+  "norm": "per_sample",
+  "epochs": 30,
+  "batch_size": 256,
+  "lr": 0.001,
+  "val_ratio": 0.1,
+  "seed": 42,
+  "device": "cuda",
+  "classes": "7,9,10,11,12,13",
+  "num_workers": 0,
+  "pin_memory": false,
+  "prefetch_factor": 1,
+  "drop_last": false,
+  "sampler_type": "none",
+  "loss_type": "raw",
+  "out_dir": "runs\\raw_cnn_ms2_3715_20260325_003058"
+}
