@@ -23,7 +23,7 @@
 
   "sampler_type": "weighted",
   "base_loss_type": "stage_comp",
-  "stage_beta": 0.999,
+  "stage_beta": 0.9999,
   "stage_gamma_max": 2.5,
 
   "use_embed_constraint": true,
@@ -37,7 +37,7 @@
 
   "multicenter_num_centers": 3,
   "multicenter_balance_mode": "class",
-  "multicenter_separation_weight": 0.2,
+  "multicenter_separation_weight": 0.3,
   "multicenter_separation_margin": 0.5,
 
   "export_tsne": true,
@@ -45,7 +45,7 @@
 
   "use_custom_train_counts": true,
   "train_class_counts": {
-    "9": 500,
+    "9": 400,
     "10": 80,
     "11": 750,
     "13": 180

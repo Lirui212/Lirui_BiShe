@@ -50,7 +50,7 @@
 
   "use_custom_train_counts": true,
   "train_class_counts": {
-    "9": 500,
+    "9": 400,
     "10": 80,
     "11": 750,
     "13": 180

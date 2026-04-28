@@ -22,14 +22,10 @@
 
   "sampler_type": "none",
   "loss_type": "raw",
-  "stage_beta": 0.999,
-  "stage_gamma_max": 2.5,
-  "focal_gamma": 2.0,
-  "cb_beta": 0.9999,
   
   "use_custom_train_counts": true,
   "train_class_counts": {
-    "9": 500,
+    "9": 400,
     "10": 80,
     "11": 750,
     "13": 180
